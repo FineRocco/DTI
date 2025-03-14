@@ -6,14 +6,14 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.HashSet;
+import java.util.Map;
 
 public class DTIMessage<K,V> implements Serializable {
     private DTIRequestType type;
     private K id;
     private V value;
     private int ownerId;
-    private HashSet<K> keySet;
+    private Map<K,V> map;
     private int size;
 
 
@@ -62,14 +62,6 @@ public class DTIMessage<K,V> implements Serializable {
         this.value = value;
         }
 
-        public HashSet<K> getKeySet() {
-        return keySet;
-        }
-
-        public void setKeySet(HashSet<K> keySet) {
-        this.keySet = keySet;
-        }
-
         public int getSize() {
         return size;
         }
@@ -86,6 +78,13 @@ public class DTIMessage<K,V> implements Serializable {
             this.ownerId = ownerId;
         }
 
+        public Map<K,V> getMap() {
+            return map;
+        }
+
+        public void setMap(Map<K,V> map) {
+            this.map = map;
+        }
 }
 
 

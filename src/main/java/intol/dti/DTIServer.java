@@ -11,17 +11,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
 public class DTIServer<K, V> extends DefaultSingleRecoverable {
     private final Logger logger = LoggerFactory.getLogger("bftsmart");
-    private TreeMap<K, V> replicaMapUTXO;
+    private TreeMap<K, V> replicaMapCoins; //coinID -> coinValue
+    private TreeMap<K, List<V>> replicaMapOwners; //ownerID -> list of coinIDs
+
 
         //The constructor passes the id of the server to the super class
     public DTIServer(int id) {
-        replicaMapUTXO = new TreeMap<>();
+        replicaMapCoins = new TreeMap<>();
+        replicaMapOwners = new TreeMap<>();
 
         //turn-on BFT-SMaRt'replica
         new ServiceReplica(id, this, this);
@@ -39,7 +45,8 @@ public class DTIServer<K, V> extends DefaultSingleRecoverable {
     public void installSnapshot(byte[] state) {
         try (ByteArrayInputStream bis = new ByteArrayInputStream(state);
              ObjectInput in = new ObjectInputStream(bis)) {
-            replicaMapUTXO = (TreeMap<K, V>) in.readObject();
+            replicaMapCoins = (TreeMap<K, V>) in.readObject();
+            replicaMapOwners = (TreeMap<K, List<V>>) in.readObject();
         } catch (ClassNotFoundException | IOException ex) {
             ex.printStackTrace(); //debug instruction
         }
@@ -49,7 +56,8 @@ public class DTIServer<K, V> extends DefaultSingleRecoverable {
     public byte[] getSnapshot() {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
              ObjectOutput out = new ObjectOutputStream(bos)) {
-            out.writeObject(replicaMapUTXO);
+            out.writeObject(replicaMapCoins);
+            out.writeObject(replicaMapOwners);
             out.flush();
             bos.flush();
             return bos.toByteArray();
@@ -71,7 +79,19 @@ public class DTIServer<K, V> extends DefaultSingleRecoverable {
 
             switch (cmd) {
                 case MY_COINS:
-                    //TODO
+                    List<V> coins = replicaMapOwners.get(msgCtx.getSender());
+                    Map<K, V> coinValues = new HashMap<>();
+                    if (coins != null) {
+                        for (V coinId : coins) {
+                            K coinIdAsK = (K) coinId;
+                            V coinValue = replicaMapCoins.get(coinIdAsK);
+                            if (coinValue != null) {
+                                coinValues.put(coinIdAsK, coinValue);
+                            }
+                        }
+                        response.setMap(coinValues);
+                    }
+                    return DTIMessage.toBytes(response);
                 case MINT:
                     //TODO
                 case SPEND:
