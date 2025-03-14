@@ -22,14 +22,37 @@ public class InteractiveClient {
 
             if(cmd.equalsIgnoreCase("COINS")) {
                 //invokes the op on the servers
-                Map<Integer,Float> coins = dti.getCoins();
-                for (Map.Entry<Integer,Float> entry : coins.entrySet()) {
-                    Integer key = entry.getKey();
-                    Float value = entry.getValue();
-                    System.out.println("\nValue associated with " + key + ": " + value + "\n");
+                Map<Integer,String> coins = dti.getCoins();
+                if(coins == null) {
+                    System.out.println("\nYou have no coins");
+                    continue;
                 }
+                int totalValue = 0;
+                for (Map.Entry<Integer,String> entry : coins.entrySet()) {
+                    Integer key = entry.getKey();
+                    String valueStr = entry.getValue();
+                    try {
+                        Float value = Float.parseFloat(valueStr);
+                        totalValue += value;
+                        System.out.println("\nValue associated with " + key + ": " + value);
+                    } catch (NumberFormatException e) {
+                        System.out.println("\nInvalid value format for key " + key + ": " + valueStr + "\n");
+                    }
+                }
+                System.out.println("\nTotal value is: " + totalValue);
             } else if(cmd.equalsIgnoreCase("MINT")) {
-                //TODO
+                Float value;
+                try {
+                    value = Float.parseFloat(console.readLine("Enter a numeric value: "));
+                } catch (NumberFormatException e) {
+                    System.out.println("\tThe value is supposed to be a number!\n");
+                    continue;
+                }
+
+                //invokes the op on the servers
+                Integer coinId = dti.mint(value);
+
+                System.out.println("\nCoin created with ID: " + coinId + " with value: " + value);
             } else if(cmd.equalsIgnoreCase("SPEND")) {
                 //TODO
             }

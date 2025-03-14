@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -79,8 +80,11 @@ public class DTIServer<K, V> extends DefaultSingleRecoverable {
 
             switch (cmd) {
                 case MY_COINS:
-                    List<V> coins = replicaMapOwners.get(msgCtx.getSender());
+                    //Get the list of coins owned by the sender
+                    List<V> coins = replicaMapOwners.get((K) Integer.valueOf(msgCtx.getSender()));
                     Map<K, V> coinValues = new HashMap<>();
+
+                    //Get the values of the coins
                     if (coins != null) {
                         for (V coinId : coins) {
                             K coinIdAsK = (K) coinId;
@@ -89,11 +93,37 @@ public class DTIServer<K, V> extends DefaultSingleRecoverable {
                                 coinValues.put(coinIdAsK, coinValue);
                             }
                         }
+                        //Return the list of coins
                         response.setMap(coinValues);
+                    }else{
+                        //If the owner has no coins, return an empty list
+                        coins= new ArrayList<>();
+                        replicaMapOwners.put((K) Integer.valueOf(msgCtx.getSender()), coins);
                     }
                     return DTIMessage.toBytes(response);
                 case MINT:
-                    //TODO
+                    // Generate a new unique ID for the coin
+                    int newId = 0;
+                    if (!replicaMapCoins.isEmpty() && replicaMapCoins.lastKey() instanceof Integer) {
+                        newId = (Integer)replicaMapCoins.lastKey() + 1;
+                    }
+                    //Add the new coin to the map
+                    replicaMapCoins.put((K) Integer.valueOf(newId), request.getValue());
+
+                    //Check if the owner has a list of coins and create if not
+                    List<V> coinsList = replicaMapOwners.get((K) Integer.valueOf(msgCtx.getSender()));
+                    if (coinsList == null) {
+                        coinsList = new ArrayList<>();
+                    }
+
+                    //Add the new coin to the owner's list
+                    coinsList.add((V) Integer.valueOf(newId));
+                    replicaMapOwners.put((K) Integer.valueOf(msgCtx.getSender()), coinsList);
+
+                    //Return the new coin ID
+                    System.out.println("Minted coin with ID: " + newId);
+                    response.setId((K) Integer.valueOf(newId));
+                    return DTIMessage.toBytes(response);
                 case SPEND:
                     //TODO
             }
