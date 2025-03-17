@@ -6,14 +6,17 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 
 public class DTIMessage<K,V> implements Serializable {
     private DTIRequestType type;
     private K id;
     private V value;
-    private int ownerId;
+    private int userId;
     private Map<K,V> map;
+    private List<K> keyList;
+    
     private int size;
 
 
@@ -70,12 +73,12 @@ public class DTIMessage<K,V> implements Serializable {
         this.size = size;
         }
 
-        public int getOwnerId() {
-            return ownerId;
+        public int getUserId() {
+            return userId;
         }
-        
-        public void setOwnerId(int ownerId) {
-            this.ownerId = ownerId;
+
+        public void setUserId(int userId) {
+            this.userId = userId;
         }
 
         public Map<K,V> getMap() {
@@ -84,6 +87,14 @@ public class DTIMessage<K,V> implements Serializable {
 
         public void setMap(Map<K,V> map) {
             this.map = map;
+        }
+
+        public List<K> getKeyList() {
+            return keyList;
+        }
+
+        public void setKeyList(List<K> keyList) {
+            this.keyList = keyList;
         }
 }
 

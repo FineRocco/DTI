@@ -2,6 +2,8 @@ package intol.dti;
 
 import java.io.Console;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 public class InteractiveClient {
@@ -54,9 +56,31 @@ public class InteractiveClient {
 
                 System.out.println("\nCoin created with ID: " + coinId + " with value: " + value);
             } else if(cmd.equalsIgnoreCase("SPEND")) {
-                //TODO
-            }
+                int value;
+                int receiverId;
+                List<Integer> coins;
+                try {
+                    // Get the numeric value to spend.
+                    value = Integer.parseInt(console.readLine("Enter a numeric value to spend: "));
+                    // Get the receiver's ID.
+                    receiverId = Integer.parseInt(console.readLine("Enter the ID of the receiver: "));
+                    // Get a comma-separated list of coin IDs to use.
+                    String coinInput = console.readLine("Enter the coin IDs to use (comma separated): ");
+                    
+                    // Initialize the list and parse the input.
+                    coins = new ArrayList<>();
+                    String[] coinIds = coinInput.split(",");
+                    for(String coinStr : coinIds) {
+                        coins.add(Integer.parseInt(coinStr.trim()));
+                    }
+                } catch (NumberFormatException e) {
+                    System.out.println("\tThe value is supposed to be a number!\n");
+                    continue;
+                }
 
+                Integer coinId = dti.spend(coins, receiverId, value);
+                System.out.println("\nThe coin ID with the remaining value is: " + coinId);
+            }
         }
 
     }

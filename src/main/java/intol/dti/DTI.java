@@ -1,5 +1,6 @@
 package intol.dti;
 
+import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -49,27 +50,51 @@ public class DTI<K, V> {
             request.setValue((V) value.toString());
 
             //invokes BFT-SMaRt
-            rep = serviceProxy.invokeUnordered(DTIMessage.toBytes(request));
+            rep = serviceProxy.invokeOrdered(DTIMessage.toBytes(request));
         } catch (Exception e) {
             logger.error("Failed to send MINT request");
-            return null;
+            return -1;
         }
 
         if(rep.length == 0){
-            return null;
+            return -1;
         }
         try{
             DTIMessage<K,V> response = DTIMessage.fromBytes(rep);
             return (Integer) response.getId();
         } catch (Exception e) {
             logger.error("Failed to deserialize response of MINT request");
-            return null;
+            return -1;
         }
     }
 
-    public Integer spend(Integer[] coinIDs, int receiverId, int totalValue) {
-        return null;
-        // TODO
+    public Integer spend(List<Integer> coinIDs, int receiverId, int value) {
+        byte[] rep;
+        try{
+            DTIMessage<K,V> request = new DTIMessage<>();
+            request.setType(DTIRequestType.SPEND);
+            // Convert float to string to match the generic type V
+            request.setKeyList((List<K>)coinIDs);
+            request.setUserId(receiverId);
+            request.setValue((V) Integer.valueOf(value));
+
+            //invokes BFT-SMaRt
+            rep = serviceProxy.invokeOrdered(DTIMessage.toBytes(request));
+        } catch (Exception e) {
+            logger.error("Failed to send MINT request");
+            return -1;
+        }
+
+        if(rep.length == 0){
+            return -1;
+        }
+        try{
+            DTIMessage<K,V> response = DTIMessage.fromBytes(rep);
+            return (Integer) response.getUserId();
+        } catch (Exception e) {
+            logger.error("Failed to deserialize response of MINT request");
+            return -1;
+        }
     }
 
 }
