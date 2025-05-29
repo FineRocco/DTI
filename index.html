@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeFi Project - DEX & Loans</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.9.0/dist/web3.min.js"></script>
+</head>
+<body>
+    <script src="main.js" type="module"></script>
+
+    <header>
+        <h1>Decentralized Finance Platform</h1>
+        <button id="connectWalletBtn" onclick="window.connectMetaMask()">Connect Wallet</button>
+        <p id="walletAddress">Wallet: Not Connected</p>
+        <p>DEX/ETH Exchange Rate: <span id="exchangeRateDisplay">Loading...</span> (Wei per DEX)</p>
+        <p>Contract ETH Balance: <span id="contractEthBalanceDisplay">Loading...</span> ETH</p>
+    </header>
+
+    <main>
+        <section id="userInfo" class="user-section">
+            <h2>My Wallet</h2>
+            <p>My DEX Balance: <span id="myDexBalanceDisplay">0</span> DEX <button onclick="window.getDex()">Refresh DEX</button></p>
+            <p>My Borrowed (Unpaid) ETH: <span id="myBorrowedEthDisplay">0</span> ETH <button onclick="window.getTotalBorrowedAndNotPaidBackEth()">Refresh Borrowed</button></p>
+        </section>
+
+        <hr>
+
+        <section id="dexActions" class="user-section">
+            <h2>DEX Token Actions</h2>
+            <div>
+                <h3>Buy DEX Tokens</h3>
+                <input type="text" id="buyDexAmountWei" placeholder="Amount in Wei to spend"> 
+                <button id="buyDexBtn" onclick="window.buyDex()">Buy DEX</button>
+            </div>
+            <div>
+                <h3>Sell DEX Tokens</h3>
+                <input type="number" id="sellDexAmountDex" placeholder="Amount in DEX to sell">
+                <button id="sellDexBtn" onclick="window.sellDex()">Sell DEX</button>
+            </div>
+        </section>
+
+        <hr>
+
+        <section id="loanActions" class="user-section">
+            <h2>Loan Actions</h2>
+            <div>
+                <h3>Request Loan with DEX</h3>
+                <input type="number" id="loanDexAmount" placeholder="DEX amount for collateral">
+                <input type="number" id="loanDexDeadline" placeholder="Deadline (days from now)">
+                <button id="requestLoanDexBtn" onclick="window.loan()">Request Loan (DEX)</button>
+                <p>Estimated ETH to receive (50% LTV): <span id="ethForDexLoanDisplay">0</span> ETH</p>
+            </div>
+            <div>
+                <h3>Request Loan with NFT</h3>
+                <input type="text" id="loanNftContractAddress" placeholder="NFT Contract Address">
+                <input type="number" id="loanNftTokenId" placeholder="NFT Token ID">
+                <input type="number" id="loanNftEthAmount" placeholder="Desired ETH loan amount">
+                <input type="number" id="loanNftDeadline" placeholder="Deadline (days from now)">
+                <button id="requestLoanNftBtn" onclick="window.makeLoanRequestByNft()">Request Loan (NFT)</button>
+            </div>
+            <div>
+                <h3>Make Periodic Loan Payment</h3>
+                <input type="number" id="periodicPaymentLoanId" placeholder="Loan ID for payment">
+                <input type="number" id="periodicPaymentAmountEth" placeholder="Interest Payment in ETH">
+                <button id="makePeriodicPaymentBtn" onclick="window.makePeriodicPayment()">Make Periodic Payment</button>
+            </div>
+            <div>
+                <h3>Terminate Loan Early (DEX-based)</h3>
+                <input type="number" id="returnLoanId" placeholder="Loan ID to terminate">
+                <input type="number" id="returnLoanAmountEth" placeholder="Full Repayment in ETH (incl. fee)">
+                <button id="returnLoanBtn" onclick="window.returnLoan()">Terminate Loan</button>
+            </div>
+        </section>
+
+        <hr>
+
+        <section id="lendNftSection" class="user-section">
+            <h2>Lend ETH for NFT-backed Loans</h2>
+            <button onclick="window.getAvailableNfts()">Refresh Available NFT Loans</button>
+            <p>Available NFT Loan Requests:</p>
+            <ul id="availableNftLoanRequests">
+                </ul>
+            <div>
+                <h3>Fund Specific NFT Loan (Alternative Manual Entry)</h3>
+                <input type="text" id="fundNftContractAddress" placeholder="NFT Contract Address to Fund">
+                <input type="number" id="fundNftTokenId" placeholder="NFT Token ID to Fund">
+                <input type="number" id="fundLenderDexStake" placeholder="Your DEX to stake (smallest units)">
+                <button id="fundSpecificNftLoanBtn" onclick="window.loanByNft()">Fund NFT Loan (Manual)</button>
+                <small>Note: It's preferred to fund via buttons on the list above once populated. This is for manual use if loan details are known.</small>
+            </div>
+            <div>
+                <h3>Cancel My NFT Loan Request</h3>
+                <input type="text" id="cancelNftContractAddress" placeholder="NFT Contract Address">
+                <input type="number" id="cancelNftTokenId" placeholder="NFT Token ID">
+                <button id="cancelLoanNftBtn" onclick="window.cancelLoanRequestByNft()">Cancel NFT Loan Request</button>
+            </div>
+        </section>
+
+        <hr>
+         <section id="myNftsSection" class="user-section">
+            <h2>My NFTs (from SimpleNFT Contract)</h2>
+            <button id="viewMyNftsBtn" onclick="window.getAllTokenURIs()">View My Minted NFTs</button>
+            <ul id="myNftList">
+                </ul>
+        </section>
+        <hr>
+
+        <section id="ownerSection" class="owner-section" style="display:none;">
+            <h2>Owner Panel</h2>
+            <div>
+                <h3>Set Exchange Rate</h3>
+                <input type="number" id="newExchangeRate" placeholder="New Wei per 1 whole DEX token">
+                <button id="setExchangeRateBtn" onclick="window.setRateEthToDex()">Set Rate</button>
+            </div>
+            <div>
+                <h3>Check/Process Loan</h3>
+                <input type="number" id="checkLoanId" placeholder="Loan ID">
+                <button id="checkLoanStatusBtn" onclick="window.checkLoanStatus()">Check/Process Loan</button>
+                <p id="loanStatusDisplay"></p>
+            </div>
+            <div id="loanEvents">
+                <h3>Loan Creation Events (Real-time):</h3>
+                <ul id="loanCreatedList">
+                    </ul>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>DeFi Project - 2024/2025</p>
+    </footer>
+
+</body>
+</html>

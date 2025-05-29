@@ -1,1 +1,0 @@
-export const defi_abi = [ paste-the-ABI-here ];
