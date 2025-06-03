@@ -101,9 +101,17 @@
         <hr>
          <section id="myNftsSection" class="user-section">
             <h2>My NFTs (from SimpleNFT Contract)</h2>
-            <button id="viewMyNftsBtn" onclick="window.getAllTokenURIs()">View My Minted NFTs</button>
-            <ul id="myNftList">
-                </ul>
+            <div>
+                <h3>Mint a New NFT</h3>
+                <input type="text" id="nftTokenURIInput" placeholder="Enter Token URI (e.g., IPFS link)">
+                <button id="mintNftBtn" onclick="window.mintNewNFT()">Mint NFT</button>
+                <small>Mint price: <span id="nftMintPriceDisplay">Loading...</span> Wei</small>
+            </div>
+            <br>
+            <div>
+                <button id="viewMyNftsBtn" onclick="window.getAllTokenURIs()">View My Minted NFTs</button>
+                <ul id="myNftList"></ul>
+            </div>
         </section>
         <hr>
 

@@ -3,10 +3,12 @@ pragma solidity 0.8.30;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract SimpleNFT is ERC721URIStorage, Ownable {
+
+contract SimpleNFT is ERC721URIStorage, Ownable, ERC721Enumerable {
     using Counters for Counters.Counter;
     Counters.Counter public tokenIdCounter; // Counter for generating unique token IDs
 
@@ -25,7 +27,7 @@ contract SimpleNFT is ERC721URIStorage, Ownable {
      * @param tokenURI The URI for the NFT's metadata.
      */
     function mint(string memory tokenURI) external payable {
-        require(msg.value == mintPrice, "SimpleNFT: Incorrect ETH value sent for minting");
+        require(msg.value == mintPrice, "SimpleNFT: Incorrect WEI value sent for minting");
 
         tokenIdCounter.increment();
         uint256 newTokenId = tokenIdCounter.current();
@@ -57,6 +59,24 @@ contract SimpleNFT is ERC721URIStorage, Ownable {
         require(balance > 0, "SimpleNFT: No balance to withdraw");
         (bool success, ) = owner().call{value: balance}("");
         require(success, "SimpleNFT: Withdrawal failed");
+    }
+
+    function _beforeTokenTransfer(address from, address to, uint256 tokenId, uint256 batchSize)
+    internal
+    virtual
+    override(ERC721, ERC721Enumerable) // Specify both base contracts
+    {
+    super._beforeTokenTransfer(from, to, tokenId, batchSize);
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+    public
+    view
+    virtual
+    override(ERC721, ERC721Enumerable, ERC721URIStorage) // Specify all relevant inherited contracts
+    returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
     }
 
     /**

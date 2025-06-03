@@ -1,59 +1,65 @@
-// Ensure Web3.js is loaded, e.g., via a script tag in your HTML:
-// <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
-// Or if using a bundler: import Web3 from 'web3';
-
+// Global declarations should use 'let' if they will be reassigned
 let web3;
 let userAccount;
 let defi_contract;
 let nft_contract;
 
-// --- Contract Setup ---
-// Replace with your deployed contract addresses on Sepolia
-const defi_contractAddress = "0xE0A3e165c83fB800a68520A124717f2a6bB6bF62";
-const nft_contractAddress = "0xAbb121Df663Ec5E9E5FC2c94D1B35397143d38C6";
-
-// Import ABIs (make sure these files exist and export the ABI arrays)
-// Example: In abi_decentralized_finance.js -> export const defi_abi = [...];
+// --- Contract Setup --- (These can remain const as they are not reassigned)
+const defi_contractAddress = "0x8dbEf4e4d170447e2F3dC881Caed895CfcA883b7";
 import { defi_abi } from "./abi_decentralized_finance.js";
+
+const nft_contractAddress = "0xfa6F3ee2e7f99576f356810f37A394cD34691e38";
 import { nft_abi } from "./abi_nft.js";
 
-
-// --- DOM Element Placeholders (examples, adjust to your HTML) ---
-// You'll need to get values from input fields and update display elements.
-// const dexAmountInput = document.getElementById('dexAmountInput');
-// const ethAmountInput = document.getElementById('ethAmountInput');
-// const loanIdInput = document.getElementById('loanIdInput');
-// const displayArea = document.getElementById('displayArea');
-// const ownerPanel = document.getElementById('ownerPanel'); // For owner-specific UI
-
-// --- Initialization and Wallet Connection ---
 async function connectMetaMask() {
     if (window.ethereum) {
-        web3 = new Web3(window.ethereum);
         try {
+            // Initialize web3 INSIDE connectMetaMask
+            web3 = new Web3(window.ethereum);
+
             const accounts = await window.ethereum.request({
                 method: "eth_requestAccounts",
             });
-            userAccount = accounts[0];
+            
+            userAccount = accounts[0]; // Assign global userAccount
             console.log("Connected account:", userAccount);
-            document.getElementById('walletAddress').textContent = `Wallet: ${userAccount.substring(0, 6)}...${userAccount.substring(userAccount.length - 4)}`;
+            document.getElementById("walletAddress").innerText = "Wallet: " + userAccount;
 
+            // Initialize contract instances INSIDE connectMetaMask, AFTER web3 is set
+            if (defi_abi && defi_contractAddress) {
+                defi_contract = new web3.eth.Contract(defi_abi, defi_contractAddress);
+                console.log("DeFi contract instance created.");
+            } else {
+                console.error("DeFi ABI or Address missing for contract initialization.");
+                alert("Failed to initialize DeFi contract. ABI/Address missing.");
+                return; // Prevent further execution if main contract fails
+            }
 
-            // Initialize contract instances
-            defi_contract = new web3.eth.Contract(defi_abi, defi_contractAddress);
-            nft_contract = new web3.eth.Contract(nft_abi, nft_contractAddress);
+            if (nft_abi && nft_contractAddress) {
+                nft_contract = new web3.eth.Contract(nft_abi, nft_contractAddress);
+                console.log("NFT contract instance created.");
+            } else {
+                console.error("NFT ABI or Address missing for contract initialization.");
+                // Potentially alert or just log, depending on how critical NFT contract is initially
+            }
 
-            alert("Wallet connected successfully!");
+            alert("Wallet connected successfully and contracts initialized!");
+            
             // Perform initial UI updates and checks
             await checkAndDisplayOwnerFunctions();
-            await getRateEthToDex(); // Display initial rate
-            await getEthTotalBalance(); // Display contract ETH balance
-            await getDex(); // Display user's DEX balance
-            listenToLoanCreation(); // Start listening for events
+            await getRateEthToDex();
+            await getEthTotalBalance();
+            await getDex();
+            // Ensure displayNftMintPrice is called after nft_contract is initialized
+            if (typeof window.displayNftMintPrice === 'function') { // Check if it's defined
+                await window.displayNftMintPrice();
+            } else {
+                console.warn("displayNftMintPrice function not found on window object.");
+            }
 
         } catch (error) {
-            console.error("Error connecting to MetaMask:", error);
-            alert("Error connecting to MetaMask: " + error.message);
+            console.error("Error connecting to MetaMask or initializing contracts:", error);
+            alert("Error connecting: " + (error.message || "Unknown error"));
         }
     } else {
         console.error("MetaMask not found. Please install the MetaMask extension.");
@@ -62,291 +68,31 @@ async function connectMetaMask() {
 }
 
 async function checkAndDisplayOwnerFunctions() {
-    if (!defi_contract || !userAccount) return;
     try {
-        const owner = await defi_contract.methods.owner().call();
-        const ownerSection = document.getElementById('ownerSection'); // Assume this ID for owner panel
-        if (owner.toLowerCase() === userAccount.toLowerCase()) {
-            if(ownerSection) ownerSection.style.display = 'block';
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        const userAddress = accounts[0];
+
+        const ownerAddress = await defi_contract.methods.owner().call();
+
+        if (userAddress.toLowerCase() === ownerAddress.toLowerCase()) {
+            document.getElementById("ownerSection").style.display = "block";
             console.log("Current user is the owner.");
-            // Start periodic check for owner
-            setInterval(checkAllRelevantLoans, 10 * 60 * 1000); // Every 10 minutes [cite: 61]
+
+            listenToLoanCreation();
+            // Start periodic check
+            setInterval(checkLoanStatus, 10 * 60 * 1000); // Every 10 minutes
+
         } else {
-            if(ownerSection) ownerSection.style.display = 'none';
             console.log("Current user is not the owner.");
         }
     } catch (error) {
         console.error("Error checking contract owner:", error);
     }
 }
-
-// --- Owner Functions ---
-async function setRateEthToDex() { // [cite: 61]
-    if (!defi_contract || !userAccount) return alert("Connect wallet first.");
-    const newRateInput = document.getElementById('newExchangeRate'); // Assumed ID
-    if (!newRateInput || !newRateInput.value) return alert("New rate input not found or empty.");
-
-    const newRate = newRateInput.value; // This should be Wei per 1 DEX token, as per contract's dexToWeiSwapRate
-    try {
-        // Ensure newRate is in the correct format (e.g., Wei for 1 DEX)
-        // If UI input is "DEX per ETH", it needs conversion before sending
-        // For now, assume input `newRate` is directly `dexToWeiSwapRate` (Wei for 1 DEX)
-        await defi_contract.methods.ownerSetDexSwapRate(newRate).send({ from: userAccount });
-        alert("Exchange rate set successfully!");
-        await getRateEthToDex(); // Update display
-    } catch (error) {
-        console.error("Error setting exchange rate:", error);
-        alert("Error setting exchange rate: " + error.message);
-    }
-}
-
-async function listenToLoanCreation() { // [cite: 61]
-    if (!defi_contract) {
-        console.log("DeFi contract not initialized for event listening.");
-        return;
-    }
-    // The PDF event is `loanCreated(address borrower, uint256 amount, uint256 deadline)` [cite: 59]
-    // My contract also had a more detailed `LoanRequested` and `LoanFunded`
-    defi_contract.events.LoanCreated({ filter: {}, fromBlock: 'latest' })
-        .on('data', function(event) {
-            console.log("New LoanCreated Event:", event.returnValues);
-            // Update UI - e.g., add to a list, show a notification
-            const { borrower, amount, deadline } = event.returnValues;
-            const loanMsg = `New Loan: Borrower ${borrower}, Amount ${web3.utils.fromWei(amount, 'ether')} ETH, Deadline ${new Date(deadline * 1000).toLocaleString()}`;
-            alert(loanMsg); // Simple alert for owner
-            // Add to a list in the owner panel
-            const loanEventsList = document.getElementById('loanCreatedList'); // Assumed ID
-            if (loanEventsList) {
-                const listItem = document.createElement('li');
-                listItem.textContent = loanMsg;
-                loanEventsList.prepend(listItem);
-            }
-        })
-        .on('error', console.error);
-    console.log("Listening for LoanCreated events...");
-}
-
-async function checkLoanStatus() { // For owner to manually check a specific loan [cite: 61]
-    if (!defi_contract || !userAccount) return alert("Connect wallet first.");
-    const loanIdInput = document.getElementById('checkLoanId'); // Assumed ID
-    if (!loanIdInput || !loanIdInput.value) return alert("Loan ID input not found or empty.");
-    const loanId = loanIdInput.value;
-
-    try {
-        console.log(`Owner checking status of loan ID: ${loanId}`);
-        // `checkLoan` in the contract is an action, not just a status view
-        await defi_contract.methods.checkLoan(loanId).send({ from: userAccount });
-        alert(`Action to check/process loan ${loanId} sent. Check transaction status and contract state.`);
-        // You might want to fetch updated loan details afterwards
-        const loanDetails = await defi_contract.methods.getLoanDetails(loanId).call();
-        console.log("Updated loan details after check:", loanDetails);
-        // Update UI for this specific loan's status display
-        const loanStatusDisp = document.getElementById('loanStatusDisplay'); // Assumed ID
-        if(loanStatusDisp) loanStatusDisp.textContent = `Loan ${loanId} checked. Active: ${loanDetails.active}, Funded: ${loanDetails.funded}`;
-
-    } catch (error) {
-        console.error(`Error checking loan ${loanId}:`, error);
-        alert(`Error checking loan ${loanId}: ` + error.message);
-    }
-}
-// For the periodic check by owner [cite: 61]
-async function checkAllRelevantLoans() {
-    console.log("Owner: Periodically checking relevant loans...");
-    // This function needs to know which loans to check.
-    // E.g., iterate through a list of active loan IDs fetched from events or another contract method.
-    // For now, this is a placeholder for that logic.
-    // Example:
-    // const activeLoanIds = await getActiveLoanIdsFromContract(); // Needs contract support
-    // for (const loanId of activeLoanIds) {
-    //     try {
-    //         await defi_contract.methods.checkLoan(loanId).send({ from: userAccount });
-    //         console.log(`Periodically checked loan ${loanId}`);
-    //     } catch (error) {
-    //         console.error(`Error periodically checking loan ${loanId}:`, error);
-    //     }
-    // }
-    alert("Owner: Simulated periodic check of loans. Implement logic to get list of active loans.");
-}
-
-
-async function buyDex() { // // Assuming this citation refers to the PDF's client-side requirements for buying DEX
-    if (!defi_contract || !userAccount) return alert("Connect wallet first.");
-    
-    // Assuming your HTML input field for Wei amount has the ID 'buyDexAmountWei'
-    const weiAmountInput = document.getElementById('buyDexAmountWei'); // Changed ID
-    
-    if (!weiAmountInput || !weiAmountInput.value) {
-        return alert("Wei amount input not found or empty.");
-    }
-    
-    const weiAmountString = weiAmountInput.value;
-
-    // Validate if the input is a valid non-negative integer string
-    if (!/^\d+$/.test(weiAmountString)) {
-        return alert("Please enter a valid Wei amount (non-negative integer).");
-    }
-
-    try {
-        // The input 'weiAmountString' is already in Wei, so no conversion needed
-        // It's passed directly as the 'value' property
-        await defi_contract.methods.buyDex().send({ from: userAccount, value: weiAmountString });
-        alert("DEX purchase successful!");
-        
-        // Assuming these functions exist and update the UI
-        if (typeof getDex === 'function') await getDex(); 
-        if (typeof getEthTotalBalance === 'function') await getEthTotalBalance(); 
-        
-    } catch (error) {
-        console.error("Error buying DEX:", error);
-        alert("Error buying DEX: " + (error.message || error.data?.message || "Unknown error"));
-    }
-}
-
-async function getDex() { // See user's DEX balance [cite: 62]
-    if (!defi_contract || !userAccount) return alert("Connect wallet first.");
-    try {
-        // Assuming contract's `getDexBalanceOfUser(address)`
-        const balance = await defi_contract.methods.getDexBalanceOfUser(userAccount).call();
-        const dexBalanceFormatted = web3.utils.fromWei(balance, 'ether'); // Assuming DEX has 18 decimals
-        console.log("User DEX Balance:", dexBalanceFormatted);
-        // Update UI
-        const myDexBalanceDisp = document.getElementById('myDexBalanceDisplay'); // Assumed ID
-        if(myDexBalanceDisp) myDexBalanceDisp.textContent = `${dexBalanceFormatted} DEX`;
-        return dexBalanceFormatted;
-    } catch (error) {
-        console.error("Error fetching DEX balance:", error);
-        alert("Error fetching DEX balance: " + error.message);
-    }
-}
-
-async function sellDex() { // [cite: 62]
-    if (!defi_contract || !nft_contract || !userAccount) return alert("Connect wallet first."); // Assuming nft_contract is an alias for dexTokenContract if they are the same for some reason. Correcting to defi_contract for DEX.
-    const dexAmountInput = document.getElementById('sellDexAmountDex'); // Assumed ID
-    if (!dexAmountInput || !dexAmountInput.value) return alert("DEX amount input not found or empty.");
-    const dexAmount = dexAmountInput.value;
-
-    try {
-        const dexAmountInSmallestUnits = web3.utils.toWei(dexAmount, 'ether'); // Assuming DEX 18 decimals
-
-        // User must first approve the DeFi contract to spend their DEX tokens
-        // The DeFi contract itself is the ERC20 token, so direct transfer within its functions.
-        // No separate approval needed IF sellDex handles the token movement from msg.sender using _transfer.
-        // If DeFi contract was separate from DEX token, approval would be:
-        // const dexTokenContract = new web3.eth.Contract(dexTokenAbi, dexTokenAddress);
-        // await dexTokenContract.methods.approve(defi_contractAddress, dexAmountInSmallestUnits).send({ from: userAccount });
-        // alert("DEX approved for selling. Now confirming sell transaction...");
-
-        await defi_contract.methods.sellDex(dexAmountInSmallestUnits).send({ from: userAccount });
-        alert("DEX sold successfully!");
-        await getDex(); // Update user's DEX balance
-        await getEthTotalBalance(); // Update contract's ETH balance
-    } catch (error) {
-        console.error("Error selling DEX:", error);
-        alert("Error selling DEX: " + error.message);
-    }
-}
-
-async function loan() { // Request loan with DEX collateral [cite: 62]
-    if (!defi_contract || !userAccount) return alert("Connect wallet first.");
-    const dexCollateralInput = document.getElementById('loanDexAmount'); // Assumed ID
-    const deadlineInput = document.getElementById('loanDexDeadline'); // Assumed ID, expects days from now
-
-    if (!dexCollateralInput || !dexCollateralInput.value) return alert("DEX collateral input not found or empty.");
-    if (!deadlineInput || !deadlineInput.value) return alert("Deadline input not found or empty.");
-
-    const dexCollateralAmount = dexCollateralInput.value;
-    const deadlineInDays = parseInt(deadlineInput.value);
-
-    if (isNaN(deadlineInDays) || deadlineInDays <= 0) return alert("Invalid deadline.");
-
-    try {
-        const dexAmountInSmallestUnits = web3.utils.toWei(dexCollateralAmount, 'ether'); // DEX 18 decimals
-
-        // Contract `loan` function expects `desiredDeadlineTimestamp`
-        const currentTimestamp = Math.floor(Date.now() / 1000);
-        const deadlineTimestamp = currentTimestamp + (deadlineInDays * 24 * 60 * 60);
-
-        // DEX approval is handled internally by the contract if it's also the ERC20
-        // using _transfer from msg.sender.
-
-        const result = await defi_contract.methods.loan(dexAmountInSmallestUnits, deadlineTimestamp).send({ from: userAccount });
-        const loanId = result.events?.LoanRequested?.returnValues?.loanId || result.events?.LoanCreated?.returnValues?.loanId; // Adjust event name if needed
-        alert(`DEX-backed loan requested successfully! ${loanId ? 'Loan ID: ' + loanId : 'Check transaction for Loan ID.'}`);
-        await getDex();
-        await getEthTotalBalance();
-    } catch (error) {
-        console.error("Error requesting DEX-backed loan:", error);
-        alert("Error requesting DEX-backed loan: " + error.message);
-    }
-}
-
-async function returnLoan() { // This maps to `terminateLoan` for early repayment [cite: 62]
-    if (!defi_contract || !userAccount) return alert("Connect wallet first.");
-    const loanIdInput = document.getElementById('returnLoanId'); // Assumed ID
-    const ethRepaymentInput = document.getElementById('returnLoanAmountEth'); // Assumed ID for repayment amount (principal + fee)
-
-    if (!loanIdInput || !loanIdInput.value) return alert("Loan ID input not found or empty.");
-    if (!ethRepaymentInput || !ethRepaymentInput.value) return alert("ETH repayment amount input not found or empty.");
-
-    const loanId = loanIdInput.value;
-    const ethToRepay = ethRepaymentInput.value;
-
-    try {
-        const weiToSend = web3.utils.toWei(ethToRepay, 'ether');
-        await defi_contract.methods.terminateLoan(loanId).send({ from: userAccount, value: weiToSend });
-        alert(`Loan ${loanId} termination/repayment successful!`);
-        await getDex();
-        await getEthTotalBalance();
-        // Update user's borrowed amount display
-    } catch (error) {
-        console.error(`Error returning/terminating loan ${loanId}:`, error);
-        alert(`Error returning/terminating loan ${loanId}: ` + error.message);
-    }
-}
-// For periodic payments:
-async function makePeriodicPayment() {
-    if (!defi_contract || !userAccount) return alert("Connect wallet first.");
-    const loanIdInput = document.getElementById('periodicPaymentLoanId'); // Assumed ID
-    const paymentAmountEthInput = document.getElementById('periodicPaymentAmountEth'); // Assumed ID
-
-    if (!loanIdInput || !loanIdInput.value) return alert("Loan ID for payment not found or empty.");
-    if (!paymentAmountEthInput || !paymentAmountEthInput.value) return alert("Payment amount for payment not found or empty.");
-    
-    const loanId = loanIdInput.value;
-    const paymentAmountEth = paymentAmountEthInput.value;
-
-    try {
-        const paymentWei = web3.utils.toWei(paymentAmountEth, 'ether');
-        await defi_contract.methods.makePayment(loanId).send({ from: userAccount, value: paymentWei });
-        alert(`Periodic payment for loan ${loanId} successful!`);
-        // Update relevant displays
-    } catch (error) {
-        console.error(`Error making periodic payment for loan ${loanId}:`, error);
-        alert(`Error making periodic payment for loan ${loanId}: ` + error.message);
-    }
-}
-
-
-async function getEthTotalBalance() { // See contract's ETH balance [cite: 62]
-    if (!web3 || !defi_contractAddress) return alert("Web3 not initialized or contract address missing.");
-    try {
-        const balanceWei = await web3.eth.getBalance(defi_contractAddress);
-        const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
-        console.log("Contract ETH Balance:", balanceEth);
-        // Update UI
-        const contractEthDisp = document.getElementById('contractEthBalanceDisplay'); // Assumed ID
-        if(contractEthDisp) contractEthDisp.textContent = `${balanceEth} ETH`;
-        return balanceEth;
-    } catch (error) {
-        console.error("Error fetching contract ETH balance:", error);
-        alert("Error fetching contract ETH balance: " + error.message);
-    }
-}
-
 async function getRateEthToDex() { // See exchange rate [cite: 62]
     if (!defi_contract) return alert("Connect wallet and initialize contract first.");
     try {
-        const rateWeiPerDEX = await defi_contract.methods.dexToWeiSwapRate().call(); // This is Wei for 1 whole DEX
+        const rateWeiPerDEX = await defi_contract.methods.dexSwapRate().call(); // This is Wei for 1 whole DEX
         // To display "X DEX per 1 ETH":
         // 1 ETH = 10^18 Wei.
         // DEX per ETH = (10^18 Wei / rateWeiPerDEX) * (1 / 10^decimals_of_DEX_if_rateWeiPerDEX_is_for_smallest_unit)
@@ -367,56 +113,128 @@ async function getRateEthToDex() { // See exchange rate [cite: 62]
         alert("Error fetching exchange rate: " + error.message);
     }
 }
-
-async function getAvailableNfts() { // See available NFTs to lend ETH to [cite: 62]
-    if (!defi_contract) return alert("Connect wallet first.");
-    alert("Fetching available NFT loan requests. This requires specific contract logic (e.g., iterating IDs or querying events). Implementing placeholder.");
-    // This is complex. The contract needs a way to list pending NFT loan requests.
-    // E.g., a public array of `activeNftLoanRequestIds` or querying past `LoanRequested` events where lender is address(0).
-    // For now, a placeholder:
-    const availableNftListEl = document.getElementById('availableNftLoanRequests'); // Assumed ID
-    if (availableNftListEl) availableNftListEl.innerHTML = '<li>Fetching available NFT loans... (Requires contract support for listing)</li>';
-
-    // Example if contract had `getPendingNftLoanRequestIds()` and `getLoanDetails(id)`
-    /*
+async function getEthTotalBalance() { // See contract's ETH balance [cite: 62]
+    if (!web3 || !defi_contractAddress) return alert("Web3 not initialized or contract address missing.");
     try {
-        const requestIds = await defi_contract.methods.getPendingNftLoanRequestIds().call(); // Hypothetical function
-        availableNftListEl.innerHTML = ''; // Clear
-        if (requestIds.length === 0) {
-            availableNftListEl.innerHTML = '<li>No NFT loan requests currently available.</li>';
-            return;
-        }
-        for (const id of requestIds) {
-            const loan = await defi_contract.methods.getLoanDetails(id).call();
-            if (loan.active && !loan.funded && loan.isNftBased) {
-                const listItem = document.createElement('li');
-                listItem.innerHTML = `Loan ID: ${loan.loanId}, Borrower: ${loan.borrower}, Amount: ${web3.utils.fromWei(loan.principalAmount, 'ether')} ETH, NFT: ${loan.nftContractAddress} ID: ${loan.nftTokenId}
-                                     <button onclick="window.loanByNft('${loan.nftContractAddress}', ${loan.nftTokenId})">Fund this NFT Loan</button>`; // Assuming loanByNft takes these params based on JS stubs
-                availableNftListEl.appendChild(listItem);
-            }
-        }
+        const balanceWei = await web3.eth.getBalance(defi_contractAddress);
+        const balanceEth = web3.utils.fromWei(balanceWei, 'ether');
+        console.log("Contract ETH Balance:", balanceEth);
+        // Update UI
+        const contractEthDisp = document.getElementById('contractEthBalanceDisplay'); // Assumed ID
+        if(contractEthDisp) contractEthDisp.textContent = `${balanceEth} ETH`;
+        return balanceEth;
     } catch (error) {
-        console.error("Error fetching available NFT loans:", error);
-        if (availableNftListEl) availableNftListEl.innerHTML = '<li>Error fetching NFT loan requests.</li>';
+        console.error("Error fetching contract ETH balance:", error);
+        alert("Error fetching contract ETH balance: " + error.message);
     }
-    */
-    console.log("Placeholder for getAvailableNfts. Contract needs a way to list pending requests.");
 }
 
-async function getTotalBorrowedAndNotPaidBackEth() { // [cite: 62]
+async function setRateEthToDex() {
+    const newRate = document.getElementById("newExchangeRate").value;
+    const accounts = await web3.eth.getAccounts();
+    await defi_contract.methods.ownerSetDexSwapRate(newRate).send({ from: accounts[0] });
+}
+
+async function listenToLoanCreation() {
+    defi_contract.events.loanCreated()
+        .on("data", (event) => {
+            const { borrower, amount, deadline } = event.returnValues;
+            console.log(`New loan: ${borrower}, valuw: ${web3.utils.fromWei(amount)} ETH, deadline: ${new Date(deadline * 1000)}`);
+        })
+        .on("error", console.error);
+}
+
+async function checkLoanStatus() {
+    const accounts = await web3.eth.getAccounts();
+    const totalLoans = await defi_contract.methods.loanCounter().call();
+
+    for (let i = 0; i < totalLoans; i++) {
+        try {
+            await defi_contract.methods.checkLoan(i).send({ from: accounts[0] });
+        } catch (err) {
+            console.warn(`Error checking loan ${i}:`, err.message);
+        }
+    }
+}
+
+async function buyDex() {
+    const accounts = await web3.eth.getAccounts();
+    const amountInWei = document.getElementById("buyDexAmountWei").value;
+    await defi_contract.methods.buyDex().send({
+        from: accounts[0],
+        value: amountInWei
+    });
+}
+
+async function getDex() {
+    const accounts = await web3.eth.getAccounts();
+    const balance = await defi_contract.methods.getDexBalance().call({ from: accounts[0] });
+    document.getElementById('myDexBalanceDisplay').textContent = `${balance}`;
+    console.log(`Balance: ${balance}`);
+
+    
+}
+
+async function sellDex() {
+    const accounts = await web3.eth.getAccounts();
+    const amountInWei = document.getElementById("sellDexAmountDex").value;
+    await defi_contract.methods.sellDex(amountInWei).send({ from: accounts[0] });
+}
+
+async function loan() {
+    const accounts = await web3.eth.getAccounts();
+    const amountInDex = document.getElementById("loanDexAmount").value;
+    const deadline = document.getElementById("loanDexDeadline").value;
+    //const deadlineTimestamp = Math.floor(Date.now() / 1000) + deadline * 24 * 60 * 60; // 3 dias, por exemplo
+    await defi_contract.methods.loan(amountInDex, deadline).send({ from: accounts[0] });
+    await getDex();
+}
+
+async function terminateLoan() {
+    const loanId = document.getElementById("returnLoanId").value;
+    const ethAmount = document.getElementById("returnLoanAmountEth").value;
+    const accounts = await web3.eth.getAccounts();
+
+    await defi_contract.methods.terminateLoan(loanId).send({
+        from: accounts[0],
+        value: web3.utils.toWei(ethAmount, "ether")
+    });
+}
+
+async function getTotalBorrowedAndNotPaidBackEth() {
+    const totalLoans = await defi_contract.methods.loanCounter().call();
+    let total = web3.utils.toBN("0");
+
+    for (let i = 0; i < totalLoans; i++) {
+        const ln = await defi_contract.methods.loans(i).call();
+        if (ln.isActive) {
+            total = total.add(web3.utils.toBN(ln.amount));
+        }
+    }
+    document.getElementById('myBorrowedEthDisplay').textContent = `${total}`;
+
+}
+
+// For periodic payments:
+async function makePeriodicPayment() {
     if (!defi_contract || !userAccount) return alert("Connect wallet first.");
-    // This requires a specific function in the smart contract, e.g.,
-    // `getTotalBorrowedByUser(address user)` or a global `getTotalOutstandingLoansEth()`
+    const loanIdInput = document.getElementById('periodicPaymentLoanId'); // Assumed ID
+    const paymentAmountEthInput = document.getElementById('periodicPaymentAmountEth'); // Assumed ID
+
+    if (!loanIdInput || !loanIdInput.value) return alert("Loan ID for payment not found or empty.");
+    if (!paymentAmountEthInput || !paymentAmountEthInput.value) return alert("Payment amount for payment not found or empty.");
+    
+    const loanId = loanIdInput.value;
+    const paymentAmountEth = paymentAmountEthInput.value;
+
     try {
-        // Placeholder: const totalBorrowed = await defi_contract.methods.getTotalBorrowedByUser(userAccount).call();
-        const totalBorrowedFormatted = "N/A (Contract function needed)"; // web3.utils.fromWei(totalBorrowed, 'ether');
-        console.log("Total Borrowed ETH (not paid back):", totalBorrowedFormatted);
-        // Update UI
-        const myBorrowedDisp = document.getElementById('myBorrowedEthDisplay'); // Assumed ID
-        if(myBorrowedDisp) myBorrowedDisp.textContent = `${totalBorrowedFormatted} ETH`;
+        const paymentWei = web3.utils.toWei(paymentAmountEth, 'ether');
+        await defi_contract.methods.makePayment(loanId).send({ from: userAccount, value: paymentWei });
+        alert(`Periodic payment for loan ${loanId} successful!`);
+        // Update relevant displays
     } catch (error) {
-        console.error("Error fetching total borrowed ETH:", error);
-        alert("Error fetching total borrowed ETH: " + error.message);
+        console.error(`Error making periodic payment for loan ${loanId}:`, error);
+        alert(`Error making periodic payment for loan ${loanId}: ` + error.message);
     }
 }
 
@@ -524,33 +342,141 @@ async function loanByNft() { // Lender funds an NFT loan request [cite: 62]
     }
 }
 
-// This function seems redundant if checkLoanStatus is the primary owner action trigger.
-// `checkLoan` on the contract is an action.
-// async function checkLoan() { /* ... */ }
+async function getAvailableNfts() { // See available NFTs to lend ETH to [cite: 62]
+    if (!defi_contract) return alert("Connect wallet first.");
+    alert("Fetching available NFT loan requests. This requires specific contract logic (e.g., iterating IDs or querying events). Implementing placeholder.");
+    // This is complex. The contract needs a way to list pending NFT loan requests.
+    // E.g., a public array of `activeNftLoanRequestIds` or querying past `LoanRequested` events where lender is address(0).
+    // For now, a placeholder:
+    const availableNftListEl = document.getElementById('availableNftLoanRequests'); // Assumed ID
+    if (availableNftListEl) availableNftListEl.innerHTML = '<li>Fetching available NFT loans... (Requires contract support for listing)</li>';
 
+    console.log("Placeholder for getAvailableNfts. Contract needs a way to list pending requests.");
+}
 
-// --- NFT Contract specific (utility, not directly in PDF for DeFi client) ---
-async function getAllTokenURIs() { // Example utility for SimpleNFT
-    if (!nft_contract || !userAccount) return alert("Connect wallet and ensure NFT contract is initialized.");
+async function getAllTokenURIs() {
+    if (!nft_contract || !userAccount) {
+        alert("Connect wallet and ensure NFT contract is initialized.");
+        return [];
+    }
     try {
-        const balance = await nft_contract.methods.balanceOf(userAccount).call();
-        if (balance === "0") {
+        const balanceString = await nft_contract.methods.balanceOf(userAccount).call();
+        const balance = parseInt(balanceString);
+        console.log(`NFT Balance for ${userAccount}: ${balance}`);
+
+        if (balance === 0) {
             alert("You don't own any NFTs from this collection.");
+            document.getElementById('myNftList').innerHTML = '<li>You do not own any NFTs from this collection.</li>';
             return [];
         }
-        const uris = [];
-        for (let i = 0; i < balance; i++) {
-            const tokenId = await nft_contract.methods.tokenOfOwnerByIndex(userAccount, i).call();
-            const tokenURI = await nft_contract.methods.tokenURI(tokenId).call();
-            uris.push({ tokenId, tokenURI });
-            console.log(`Token ID: ${tokenId}, URI: ${tokenURI}`);
-        }
-        alert(`Fetched URIs for ${balance} NFTs.`);
-        // Update UI to display these NFTs
-        return uris;
+
+        // Test with only the first token
+        console.log("Attempting to get tokenId for index 0...");
+        const tokenId = await nft_contract.methods.tokenOfOwnerByIndex(userAccount, 0).call(); // Test this call
+        console.log("TokenId at index 0:", tokenId);
+
+        const tokenURI = await nft_contract.methods.tokenURI(tokenId).call();
+        console.log(`Token ID: ${tokenId}, URI: ${tokenURI}`);
+
+        // ... (rest of the loop and UI update if the above works) ...
+        // For now, just alert the first one
+        alert(`First NFT: ID ${tokenId}, URI: ${tokenURI}`);
+        document.getElementById('myNftList').innerHTML = `<li>Token ID: ${tokenId}, URI: ${tokenURI}</li>`;
+
+
+        return [{ tokenId, tokenURI }]; // Return just the first for testing
     } catch (error) {
         console.error("Error fetching token URIs:", error);
-        alert("Error fetching token URIs: " + error.message);
+        document.getElementById('myNftList').innerHTML = '<li>Error fetching your NFTs.</li>';
+        alert("Error fetching token URIs: " + (error.message || "Execution reverted. Check console."));
+        return [];
+    }
+}
+
+// Function to display NFT Mint Price
+async function displayNftMintPrice() {
+    if (!nft_contract) {
+        // Attempt to initialize if not already (e.g. if page was refreshed and wallet was auto-connected)
+        if (web3 && nft_contractAddress && nft_abi) {
+             try {
+                nft_contract = new web3.eth.Contract(nft_abi, nft_contractAddress);
+             } catch (e) {
+                console.error("Failed to initialize nft_contract in displayNftMintPrice:", e);
+                const mintPriceDisplayEl = document.getElementById('nftMintPriceDisplay');
+                if (mintPriceDisplayEl) mintPriceDisplayEl.textContent = "Error initializing contract";
+                return;
+             }
+        } else {
+            console.log("NFT Contract not ready for fetching mint price (web3, address, or ABI missing).");
+            const mintPriceDisplayEl = document.getElementById('nftMintPriceDisplay');
+            if (mintPriceDisplayEl) mintPriceDisplayEl.textContent = "Contract N/A";
+            return;
+        }
+    }
+
+    try {
+        const priceInWei = await nft_contract.methods.mintPrice().call();
+        const mintPriceDisplayEl = document.getElementById('nftMintPriceDisplay');
+        if (mintPriceDisplayEl) {
+            // Displaying in Wei as the contract stores it in Wei.
+            // You could convert to Ether for display if preferred: web3.utils.fromWei(priceInWei, 'ether') + " ETH"
+            mintPriceDisplayEl.textContent = `${priceInWei.toString()} Wei`;
+        }
+    } catch (error) {
+        console.error("Error fetching NFT mint price:", error);
+        const mintPriceDisplayEl = document.getElementById('nftMintPriceDisplay');
+        if (mintPriceDisplayEl) {
+            mintPriceDisplayEl.textContent = "Error loading price";
+        }
+    }
+}
+
+// Function to mint a new NFT
+async function mintNewNFT() {
+    if (!nft_contract || !userAccount) {
+        alert("Please connect your wallet first and ensure the NFT contract is initialized.");
+        return;
+    }
+
+    const tokenURIInput = document.getElementById('nftTokenURIInput');
+    if (!tokenURIInput || !tokenURIInput.value.trim()) {
+        alert("Please enter a Token URI for your NFT (e.g., an IPFS link to your metadata JSON).");
+        return;
+    }
+    const tokenURI = tokenURIInput.value.trim();
+
+    try {
+        const currentMintPriceWei = await nft_contract.methods.mintPrice().call();
+        console.log(`Attempting to mint NFT with URI: "${tokenURI}" for ${currentMintPriceWei} Wei`);
+
+        // Send the transaction to the mint function of your SimpleNFT contract
+        await nft_contract.methods.mint(tokenURI).send({ from: userAccount, value: currentMintPriceWei });
+
+        alert("NFT minted successfully! Transaction confirmed. It may take a moment to appear in your wallet or on marketplaces.");
+        tokenURIInput.value = ""; // Clear the input field after successful mint
+
+        // Optionally, refresh the list of owned NFTs if you have such a function
+        if (typeof window.getAllTokenURIs === 'function') {
+            await window.getAllTokenURIs();
+        }
+    } catch (error) {
+        console.error("Error minting NFT:", error);
+        // Try to provide a more user-friendly error message
+        let errorMessage = "Error minting NFT. ";
+        if (error.message) {
+            if (error.message.includes("User denied transaction signature")) {
+                errorMessage += "You rejected the transaction in MetaMask.";
+            } else if (error.message.includes("Incorrect ETH value sent")) { // Matches require string in SimpleNFT
+                errorMessage += "Incorrect ETH value sent. Please check the mint price.";
+            } else {
+                errorMessage += error.message;
+            }
+        } else if (error.code === 4001) { // MetaMask user denied transaction
+             errorMessage += "You rejected the transaction in MetaMask.";
+        } else {
+            errorMessage += "An unknown error occurred. Check the console for details.";
+        }
+        alert(errorMessage);
     }
 }
 
@@ -566,7 +492,7 @@ window.sellDex = sellDex;
 // User Loan Actions
 window.loan = loan; // Request DEX-backed loan
 window.makePeriodicPayment = makePeriodicPayment; // User makes periodic payment
-window.returnLoan = returnLoan; // User terminates/repays loan fully (maps to terminateLoan)
+window.terminateLoan = terminateLoan; // User terminates/repays loan fully (maps to terminateLoan)
 window.makeLoanRequestByNft = makeLoanRequestByNft;
 window.cancelLoanRequestByNft = cancelLoanRequestByNft;
 window.loanByNft = loanByNft; // User (lender) funds an NFT loan
@@ -584,6 +510,8 @@ window.checkLoanStatus = checkLoanStatus;       // Owner triggers checkLoan on a
 
 // NFT utilities (if needed)
 window.getAllTokenURIs = getAllTokenURIs;
+window.mintNewNFT = mintNewNFT;
+window.displayNftMintPrice = displayNftMintPrice;
 
 // Initial connection attempt or setup when script loads
 window.addEventListener('load', () => {
