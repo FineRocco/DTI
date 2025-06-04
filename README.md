@@ -6,60 +6,101 @@
 * Denis Ungureanu - 56307
 * Pedro Marques - 64857
 
-## Project Description
+## Overview
+This project implements a decentralized finance (DeFi) DApp on the Sepolia testnet. It allows users to:
+1. Swap between ETH and a custom ERC-20 token (DEX).  
+2. Use DEX tokens or NFTs as collateral to borrow ETH (up to 50% LTV).  
 
-This project involves the construction of a decentralized finance (DeFi) application on the Ethereum blockchain. The core functionality includes:
+The repository includes:
+- Solidity smart contracts (ERC-20 “DEX” token, loan logic, NFT-loan logic)  
+- A simple HTML/JavaScript front-end that interacts with MetaMask and the deployed contracts (addresses and ABIs already configured in `main.js` and `abi.js`).
 
-* **Token Swapping:** Facilitating the exchange between ETH and a custom DEX (fungible) token. Users can buy and sell DEX tokens.
-* **Collateralized Loans:** Allowing users to leverage their DEX token holdings and NFTs as collateral to borrow ETH. Specifically, they can borrow up to 50% of the value of their DEX holding or NFT tokens in ETH. Once the loan is repaid, users can retain ownership of the DEX or NFT tokens presented as collateral.
+---
 
-The application aims to adjust the DEX-ETH swap rate dynamically based on the contract's DEX and ETH reserves, reacting to buy/sell orders and loan activities.
+## Prerequisites
+- **Python 3** (to run a local HTTP server)  
+- **MetaMask** (browser extension) configured to Sepolia testnet  
+- **Chrome** (recommended) or another modern browser  
 
-## Components
+---
 
-The project is structured into three main parts:
+## Running the Project Locally
 
-1.  **Smart Contract:** This is the server-side logic of the application, built as an ERC20 token standard for the custom DEX token. It manages token functionalities, loan mechanisms (including interest, deadlines, and collateral management), and swap rates.
-2.  **JavaScript File:** This handles the client-side logic of the application.
-3.  **HTML File:** This defines the application's layout and user interface.
+1. **Ensure `main.js` and `abi.js` Are Preconfigured**  
+   - The smart contracts have already been deployed to Sepolia.  
+   - `main.js` and `abi.js` contain the correct contract addresses and ABIs—no additional deployment step is required.
 
-## How to Run
+2. **Start a Local HTTP Server**  
+   > Web3 providers like MetaMask require applications to be served over HTTP or HTTPS.  
+   >  
+   > **Windows / Linux:** Open a command prompt or terminal, navigate to the project’s root folder, and run:
+   ```bash
+   python -m http.server 8080
+   ```
+   - This will serve the front-end at `http://localhost:8080/`.
 
-To run the project, ensure you have the necessary environment set up for Ethereum development (e.g., Node.js, npm, Truffle/Hardhat, a web browser with a wallet extension like MetaMask).
+3. **Connect MetaMask & Navigate to the DApp**  
+   - Open Chrome (or another modern browser) and ensure MetaMask is unlocked and set to the Sepolia network.  
+   - In the address bar, go to:
+     ```
+     http://localhost:8080/
+     ```
+   - Click the **Connect** button on the page to authorize MetaMask. (Whenever you refresh, you must click **Connect** again.)
 
-1.  **Deploy the Smart Contract:**
-    * Compile the smart contract.
-    * Deploy the compiled contract to an Ethereum test network (e.g., Sepolia). Note the contract address after deployment.
-    * The constructor requires an initial DEX-ETH swap rate. $10^{18}$ DEX tokens are minted upon deployment.
+4. **Minting & Image Uploads (Optional)**  
+   - If you want your minted tokens (ERC-20 or NFTs) to display images, use image URLs from Wikimedia Commons (e.g. `https://commons.wikimedia.org/wiki/Main_Page`) and update the metadata JSON accordingly.
 
-2.  **Configure the Client-Side Application:**
-    * Update the JavaScript file with the deployed smart contract address and ABI.
-    * Ensure the HTML file correctly links to the JavaScript file and any other dependencies.
+---
 
-3.  **Run the Application:**
-    * Open the HTML file in a web browser.
-    * Connect your Ethereum wallet (e.g., MetaMask) to the application and ensure it's set to the correct test network.
+## Usage Instructions
 
-    **Owner functionalities include**:
-    * Setting the exchange rate.
-    * Being informed when a loan is created.
-    * Checking the status of created loans (e.g., every 10 minutes by calling `checkLoan`).
+### 1. Swapping ETH ⇄ DEX
+- **Buy DEX**: Enter an ETH amount, click **Buy DEX**.  
+- **Sell DEX**: Enter a DEX token amount, click **Sell DEX**.  
 
-    **User functionalities include**:
-    * Buying and selling DEX tokens.
-    * Viewing their DEX token balance.
-    * Requesting loans using DEX or NFTs as collateral.
-    * Returning borrowed ETH.
-    * Viewing the contract's total ETH balance and the current exchange rate.
-    * Viewing available NFTs for lending ETH.
-    * Viewing their total borrowed and unpaid ETH.
+### 2. DEX-Collateralized Loans
+- **Request a DEX Loan**:  
+  1. Enter the number of DEX tokens to stake.  
+  2. Enter a deadline (timestamp must be ≤ 30 days from now).  
+  3. Click **Borrow ETH**.  
+- **Make Payments**:  
+  - Each `periodicity` interval (e.g. 3 minutes for testing), click **Make Payment** next to your active loan.  
+  - On the final payment, you must pay interest + principal to receive your DEX back.  
+- **Terminate Early**:  
+  - Enter the loan ID and click **Terminate Loan**. You must send exactly (principal + termination fee) in ETH.  
+
+### 3. NFT-Collateralized Loans
+- **Approve NFT**:  
+  - In MetaMask, call `approve(contractAddress, tokenId)` or `setApprovalForAll(contractAddress, true)` on the NFT contract.  
+- **Request an NFT Loan**:  
+  1. Enter the NFT contract address.  
+  2. Enter your token ID (starting at 1).  
+  3. Enter the desired loan amount (in wei).  
+  4. Enter a deadline (≤ 30 days from now).  
+  5. Click **Request NFT Loan**.  
+- **Fund an NFT Loan**:  
+  - Under **Available NFT Loans**, click **Fund** for a listed request. Enter the required ETH (50% LTV) and your DEX stake.  
+  - Once funded, the ETH is sent to the borrower, and the NFT remains in escrow until the borrower repays.  
+- **Repay an NFT Loan**:  
+  - Each `periodicity` cycle, click **Make Payment** next to your active NFT loan. Interest is paid to the lender.  
+  - On the final payment, pay interest + principal in ETH; your NFT will be returned to your wallet, and the lender’s staked DEX returns to them.  
+- **Cancel NFT Request** (before funding):  
+  - Click **Cancel** next to your pending request. The NFT was never transferred, so it remains in your wallet.
+
+### 4. Admin Panel
+- Only the contract owner sees this section.  
+- **Update Swap Rate**: Enter a new DEX ⇄ ETH rate (wei per DEX) and click **Update**.  
+- **Check Loans**: Click **Check All Loans** to invoke `checkLoan(loanId)` for every active loan (enforces defaults).
+
+---
 
 ## Important Notes
-
-* **Sepolia Test Network:** This project is intended to be run on the Sepolia test network.
-* **Acquire Test ETH:** It is crucial to acquire Sepolia ETH from faucets as soon as possible to test the project. Suggested faucets include:
+- **Loan IDs & NFT IDs start at 1**.  
+- **MetaMask Connection**: Whenever the page reloads, click **Connect** to re-authorize.  
+- **Use an HTTP Server**: Browsing via `file://` will NOT work with MetaMask. Always serve over `http://localhost:8080/`.
+- **Sepolia Test Network:** This project is intended to be run on the Sepolia test network.
+- **Acquire Test ETH:** It is crucial to acquire Sepolia ETH from faucets as soon as possible to test the project. Suggested faucets include:
     * `https://cloud.google.com/application/web3/faucet/ethereum/sepolia`
     * `https://faucets.chain.link/sepolia`
-    Each group member should try to collect test ETH daily.
-* **Loan Repayment:** If loan payments are missed, the collateral is lost. If all periodic payments are met, the final payment must also include the principal loan amount to recover the collateral. Premature loan termination incurs a fee.
-* **NFT-based Loans:** Users can request loans using NFTs as collateral. Other users can then lend ETH against these NFTs. If the borrower defaults, the lender receives the NFT.
+
+---
