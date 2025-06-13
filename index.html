@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeFi Project - DEX & Loans</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.9.0/dist/web3.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Decentralized Finance Platform</h1>
+        <button id="connectWalletBtn" onclick="window.connectMetaMask()">Connect Wallet</button>
+        <p id="walletAddress">Wallet: Not Connected</p>
+        <p>DEX/ETH Exchange Rate: <span id="exchangeRateDisplay">Loading...</span></p>
+        <p>Contract ETH Balance: <span id="contractEthBalanceDisplay">Loading...</span></p>
+    </header>
+
+    <main>
+        <!-- Owner Panel -->
+        <section id="ownerSection" class="owner-section" style="display:none;">
+            <h2>Owner Panel</h2>
+
+            <div>
+                <h3>Set Exchange Rate</h3>
+                <label for="newExchangeRate">New Exchange Rate (How many Wei a DEX costs):</label>
+                <input type="text" id="newExchangeRate" required><br>
+                <button id="setExchangeRateBtn" onclick="window.setRateEthToDex()">Set Rate</button>
+            </div>
+            <br>
+
+            <div>
+                <h3>Status of Created Loans</h3>
+                <ul id="trackedLoansList"></ul>
+            </div>
+            <br>
+
+            <div>
+                <h3>Loan Creation Events</h3>
+                <ul id="loanCreatedList"></ul>
+            </div>
+        </section>
+
+        <hr>
+
+        <!-- User Info -->
+        <section id="userInfo" class="user-section">
+            <h2>My Wallet</h2>
+            <div>
+                <h3>My DEX Balance: </h3>
+                <span id="myDexBalanceDisplay">0</span> DEX
+            </div>
+            <br>
+            <div>
+                <h3>My Borrowed (Unpaid): </h3>
+                <span id="myBorrowedEthDisplay">0</span> Wei
+            </div>
+            <br>
+            <div>
+                <h3>My Loans' Status:</h3>
+                <ul id="myLoansStatus"></ul>
+            </div>
+            <br>
+            <div>
+                <h3>My NFTs:</h3>
+                <ul id="myNftList"></ul>
+            </div>
+        </section>
+
+        <hr>
+
+        <!-- Mint NFT -->
+        <section id="mintNftSection" class="user-section">
+            <h2>Mint New NFT</h2>
+            <label for="tokenURI">NFT URI:</label>
+            <input type="text" id="tokenURI" required><br>
+            <button id="mintNftBtn" onclick="window.mintNFT()">Mint NFT</button>
+            
+        </section>
+
+        <hr>
+
+        <!-- DEX Token Actions -->
+        <section id="dexActions" class="user-section">
+            <h2>DEX Token Actions</h2>
+            <div>
+                <h3>Buy DEX Tokens</h3>
+                <label for="buyDexAmountWei">Amount:</label>
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <input type="number" id="buyDexAmountWei" required style="width: 160px;;">
+                    <select id="buyDexAmountWeiUnit">
+                        <option value="ETH">ETH</option>
+                        <option value="Wei">Wei</option>
+                    </select>
+                    </div>
+                    <br>
+                <button id="buyDexBtn" onclick="window.buyDex()">Buy DEX</button>
+                
+            </div>
+            <br>
+            <div>
+                <h3>Sell DEX Tokens</h3>
+                <label for="sellDexAmountDex">Dex Amount:</label>
+                <input type="number" id="sellDexAmountDex" required><br>
+                <button id="sellDexBtn" onclick="window.sellDex()">Sell DEX</button>
+            </div>
+        </section>
+
+        <hr>
+
+        <!-- Loan Actions -->
+        <section id="loanActions" class="user-section">
+            <h2>Loan Actions</h2>
+
+            <div>
+                
+                <div>
+                    <h3>Loan Using DEX</h3>
+                    <label for="loanDexAmount">Dex Amount:</label>
+                    <input type="number" id="loanDexAmount" required><br>
+                    <label for="loanDexDeadline">Deadline:</label>
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <input type="number" id="loanDexDeadline" required style="width: 160px;">
+                    <select id="loanDexDeadlineUnit">
+                        <option value="weeks">Weeks</option>
+                        <option value="days">Days</option>
+                        <option value="minutes">Minutes</option>
+                    </select>
+                    </div>
+                    <br>
+                    <button id="requestLoanDexBtn" onclick="window.loan()">Request Loan (DEX)</button>
+                </div>
+
+            </div>
+
+            <hr>
+
+            <div>
+                
+                <div>
+                    <h3>Request Loan Using NFT</h3>
+                    <label for="nftLoanId">NFT ID:</label>
+                    <input type="number" id="nftLoanId" required><br>
+
+                    <label for="nftLoanAmount">Loan Amount:</label>
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <input type="number" id="nftLoanAmount" required style="width: 160px;">
+                    <select id="nftLoanAmountUnit">
+                        <option value="ETH">ETH</option>
+                        <option value="Wei">Wei</option>
+                    </select>
+                    </div>
+                    <br>
+
+                    <label for="nftLoanDeadlineValue">Deadline:</label>
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <input type="number" id="nftLoanDeadlineValue" required style="width: 160px;">
+                    <select id="nftLoanDeadlineUnit">
+                        <option value="weeks">Weeks</option>
+                        <option value="days">Days</option>
+                        <option value="minutes">Minutes</option>
+                    </select>
+                    </div>
+                    <br>
+
+
+                    <button onclick="window.requestLoanUsingNFT()">Submit NFT Loan Request</button>
+                </div>
+                <br>
+                
+
+                <div>
+                    <h3>Cancel My NFT Loan Request</h3>
+                    <label for="cancelNFTId">NFT Token ID:</label>
+                    <input type="number" id="cancelNFTId" required><br>
+                    <button id="cancelLoanNftBtn" onclick="window.cancelLoanRequestByNft()">Cancel NFT Loan Request</button>
+                </div>
+                <br>
+                
+                <div>
+                    <h3>Available NFT Loan Requests</h3>
+                    <ul id="availableNFTLoans"></ul>
+                </div>
+                <br>
+                
+
+                <div>
+                    <h3>Fund a NFT Loan</h3>
+                    <label for="fundNftLoanId">NFT Token ID:</label>
+                    <input type="number" id="fundNftLoanId" required><br>
+                    <button id="fundNftLoanBtn" onclick="window.loanByNft()">Fund NFT Loan </button>
+                </div>
+                <br>
+            </div>
+
+            <hr>
+
+            <div>
+                <div>
+                    <h3>Make Periodic Loan Payment</h3>
+                    <label for="periodicPaymentLoanId">Loan ID:</label>
+                    <input type="number" id="periodicPaymentLoanId" required><br>
+                    <label for="periodicPaymentAmountEth">Payment Amount:</label>
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <input type="number" id="periodicPaymentAmountEth" required style="width: 160px;">
+                    <select id="periodicPaymentAmountEthUnit">
+                        <option value="ETH">ETH</option>
+                        <option value="Wei">Wei</option>
+                    </select>
+                    </div>
+                    <br>
+                    <button id="makePeriodicPaymentBtn" onclick="window.makePeriodicPayment()">Make Periodic Payment</button>
+                </div>
+                <br>
+                <div>
+                    <h3>Terminate Loan</h3>
+                    <label for="returnLoanId">Loan ID:</label>
+                    <input type="number" id="returnLoanId" required><br>
+                    <label for="returnLoanAmount">Payment Amount:</label>
+                    <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <input type="number" id="returnLoanAmount" required style="width: 160px;">
+                    <select id="returnLoanAmountUnit">
+                        <option value="ETH">ETH</option>
+                        <option value="Wei">Wei</option>
+                    </select>
+                    </div>
+                    <br>
+                    <button id="returnLoanBtn" onclick="window.terminateLoan()">Terminate Loan</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>DeFi Project - 2024/2025</p>
+    </footer>
+
+    <script src="main.js" type="module"></script>
+</body>
+</html>
+
